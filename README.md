@@ -2,7 +2,7 @@ The PARIS 2 study dataset is contained within two data sources; the first contai
 
 The primary PARIS 2 study dataset will be exported from WebSpirit using the in-built functionality as a series of five datasets, each in CSV format (.csv).  Associated Stata do-files (.do) are exported that assist with labelling the variables.  This do-file is not provided in this repository as they were not constructed by the author, however components of it are used in the "PARIS 2 Data Transformation.do" file.
 
-The randomisation data is exported from the Griffith Online Randomisation Tool.  There is one CSV file per study site.  These are imported and transformed using the "PARIS 2 Data Transformation.do" file.
+The randomisation data is exported from the Griffith Online Randomisation Tool.  There is one CSV file per study site, noting that one site did not use this tool and instead data is imported from a separate CSV file.  These are imported and transformed using the "PARIS 2 Data Transformation.do" file.
 
 The code is broken into the three sections:
 

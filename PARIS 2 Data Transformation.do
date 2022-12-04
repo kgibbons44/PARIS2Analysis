@@ -102,13 +102,21 @@ foreach v of varlist `dt_vars' {
 	rename __tmp `v' 
 	format `v' %tc
 }
-local dt_vars "adm_date dob consent_datetime non_consent_datetime"
+local dt_vars "adm_date dob"
 foreach v of varlist `dt_vars' {
 	tostring `v', replace
 	gen __tmp = date(`v', "DMY")
 	drop `v' 
 	rename __tmp `v' 
 	format `v' %td
+}
+local dt_vars "commencement_datetime consent_datetime non_consent_datetime cs_clinician_01_datetime cs_clinician_02_datetime cs_parent_01_datetime cs_parent_02_datetime"
+foreach v of varlist `dt_vars' {
+	tostring `v', replace
+	gen __tmp = date(`v', "DMYhm")
+	drop `v' 
+	rename __tmp `v' 
+	format `v' %tc
 }
 
 // Assign labels to variables
@@ -736,19 +744,20 @@ keep subjid crf09_cat-crf9_ptart_02_07_notappl
 
 // Define labels for categorical variables
 * Yes/no variables
-local yes_no_var "crf9_pia_03_01 crf9_pia_03_02 crf9_pia_03_03 crf9_pia_03_04 crf9_pia_03_05 crf9_pia_03_07_notappl crf9_ptart_02_01 crf9_ptart_02_02 crf9_ptart_02_03 crf9_ptart_02_04 crf9_ptart_02_05"
-label define yes_no 1 "Yes" 0 "No" 2 "Unknown" 3 "Not in hospital"
+local yes_no_var "crf9_pia_03_01 crf9_pia_03_02 crf9_pia_03_03 crf9_pia_03_04 crf9_pia_03_05 crf9_ptart_02_01 crf9_ptart_02_02 crf9_ptart_02_03 crf9_ptart_02_04 crf9_ptart_02_05"
+label define yes_no_crf9 1 "Yes" 0 "No" 2 "Unknown" 3 "Other"
 * Study arms
 foreach v of varlist `yes_no_var' {
-	replace `v'="1" if `v'=="Yes"
-	replace `v'="0" if `v'=="No"
-	replace `v'="2" if `v'=="Unknown"
-	replace `v'="3" if `v'=="Not in hospital"
+	replace `v'="1" if `v'=="YES"
+	replace `v'="0" if `v'=="NO"
+	replace `v'="2" if `v'=="UNKNOWN"
+	replace `v'="3" if `v'=="OTHER"
+	replace `v'="" if `v'=="notappl"
 	destring `v', replace force
-	label values `v' yes_no
+	label values `v' yes_no_crf9
 	tab `v', m
 }
-local yes_no_all "crf9_pia_03_06_01 crf9_pia_03_06_02 crf9_pia_03_06_03 crf9_pia_03_06_notappl crf9_pia_03_07_notappl crf9_ptart_02_06_01 crf9_ptart_02_06_02 crf9_ptart_02_06_03 crf9_ptart_02_06_notappl crf9_ptart_02_07_notappl"
+local yes_no_all "crf9_pia_03_06_01 crf9_pia_03_06_02 crf9_pia_03_06_03 crf9_ptart_02_06_01 crf9_ptart_02_06_02 crf9_ptart_02_06_03"
 foreach v of varlist `yes_no_all' {
 	label values `v' yes_no
 }
@@ -1000,16 +1009,24 @@ gen dem_ethn_cat=1 if dem_ethn_cat_nz==6 | dem_ethn_cat_aus==6
 replace dem_ethn_cat=2 if (dem_ethn_cat_nz==3 | dem_ethn_cat_aus==1) & dem_ethn_cat==.
 replace dem_ethn_cat=3 if (dem_ethn_cat_nz==4 | dem_ethn_cat_aus==4) & dem_ethn_cat==.
 replace dem_ethn_cat=4 if (dem_ethn_cat_nz==1 | dem_ethn_cat_aus==2) & dem_ethn_cat==.
-replace dem_ethn_cat=5 if (dem_ethn_cat_nz==3 | dem_ethn_cat_aus==1) & dem_ethn_cat==.
-replace dem_ethn_cat=6 if (dem_ethn_cat_nz==5 | dem_ethn_cat_aus==5) & dem_ethn_cat==.
-replace dem_ethn_cat=7 if (dem_ethn_cat_nz==7 | dem_ethn_cat_aus==7) & dem_ethn_cat==.
+replace dem_ethn_cat=5 if (dem_ethn_cat_nz==2 | dem_ethn_cat_aus==3) & dem_ethn_cat==.
+replace dem_ethn_cat=6 if (dem_ethn_cat_nz==5 | dem_ethn_cat_aus==5 | dem_ethnicity_national==1) & dem_ethn_cat==.
+replace dem_ethn_cat=7 if dem_ethn_cat_nz==7 | dem_ethn_cat_aus==7 | dem_ethn_cat==.
 label define dem_ethn_cat 1 "Caucasian" 2 "ATSI" 3 "Asian" 4 "Maori" 5 "Pacific Islander" 6 "Other" 7 "Unknown"
 label values dem_ethn_cat dem_ethn_cat
 
+// Collapse neonatal respiratory support
+gen hrf_resp_supp_post_birth_comb=1 if hrf_resp_supp_post_birth_other==1 | hrf_resp_supp_post_birth_modalit==1 | hrf_resp_supp_post_birth_unknown==1
+
+// Collapse previous ICU respiratory support
+replace hrf_prev_icu_adm_niv=1 if hrf_prev_icu_adm_specify~="" & hrf_prev_icu_adm_specify~="ECLS" & hrf_prev_icu_adm_specify~="ECMO"	// all low-flow apart from ECMO pts
+replace hrf_prev_icu_adm_other=. if hrf_prev_icu_adm_specify~="" & hrf_prev_icu_adm_specify~="ECLS" & hrf_prev_icu_adm_specify~="ECMO"
+gen hrf_prev_icu_adm_comb=1 if hrf_prev_icu_adm_other==1 | hrf_resp_supp_post_birth_modalit==1 | hrf_prev_icu_adm_unknown==1
+
 // Nasopharyngeal aspirate: multiple viruses
 egen npa_multiple_count=rowtotal(npa_adenovirus npa_influenza npa_parainfluenza npa_rhinovirus npa_mycoplasma npa_enterovirus npa_human_metapneu npa_rsv npa_picorna npa_other)
-gen npa_multiple=1 if npa_multiple_count>=1 & npa_multiple_count~=.
-replace npa_multiple=0 if npa_multiple==. & npa_taken==1
+gen npa_multiple=1 if npa_multiple_count>1 & npa_multiple_count~=.
+replace npa_multiple=0 if (npa_multiple==. | npa_multiple_count==1) & npa_taken==1
 label values npa_multiple yes_no
 
 // Calculte time from onset of illness to presentation in days
@@ -1019,8 +1036,16 @@ replace hrf_onset_hours=0 if hrf_onset_hours==. & hrf_onset_unknown~=1
 gen onset_of_illness_days = (hrf_onset_weeks*7*24 + hrf_onset_days*7 + hrf_onset_hours)/24
 replace onset_of_illness_days = . if hrf_onset_unknown==1 | (hrf_onset_weeks==. & hrf_onset_days==. & hrf_onset_hours==.)
 
-// Calculte time from presentation to randomisation in hours
-gen present_to_randomise_hr=hours(randomisation_datetime-adm_datetime)/24
+// Calculte time from presentation to randomisation in days
+gen present_to_randomise_days=hours(randomisation_datetime-adm_datetime)/24
+
+// Generate variable indicating tertiary or not
+gen hosp_tertiary=1 if study_hospital_o=="GCUH" | study_hospital_o=="JHCH" | study_hospital_o=="LCCH-RCT" | study_hospital_o=="KIDZ" | ///
+					  study_hospital_o=="MON" | study_hospital_o=="PERTH" | study_hospital_o=="RCH" | study_hospital_o=="RCH-RCT" | ///
+					  study_hospital_o=="TOWN" | study_hospital_o=="STAR" | study_hospital_o=="WAIK"
+replace hosp_tertiary=0 if study_hospital_o=="CAB" | study_hospital_o=="IP" | study_hospital_o=="REDC" | study_hospital_o=="TPCH" 
+label define hosp_tertiary 1 "Tertiary" 0 "Non-tertiary"
+label values hosp_tertiary hosp_tertiary
 
 // Generate variable capturing country of hospital
 gen hosp_country=1 if study_hospital_o=="CAB" | study_hospital_o=="GCUH" | study_hospital_o=="IP" | study_hospital_o=="JHCH" | study_hospital_o=="LCCH-RCT" | ///
@@ -1029,6 +1054,12 @@ gen hosp_country=1 if study_hospital_o=="CAB" | study_hospital_o=="GCUH" | study
 replace hosp_country=2 if study_hospital_o=="KIDZ" | study_hospital_o=="STAR" | study_hospital_o=="WAIK"
 label define hosp_country 1 "Australia" 2 "New Zealand"
 label values hosp_country hosp_country
+
+// Allocate discharge diagnosis
+gen dc_dx_gr=1 if dc_dx_primary==3 | dc_dx_primary==5 | dc_dx_primary==6 | dc_dx_primary==11 | dc_dx_primary==12 | dc_dx_sec_asthma==1 | dc_dx_sec_bronchiolitis==1 | dc_dx_sec_rad==1 | dc_dx_sec_viral_wheeze==1 | dc_dx_sec_bronchitis==1
+replace dc_dx_gr=2 if (dc_dx_primary==9 | dc_dx_primary==1 | dc_dx_primary==7 | dc_dx_primary==4 | dc_dx_primary==2 | dc_dx_primary==10) & dc_dx_gr==.
+label define dc_dx_gr 1 "Obstructive" 2 "Non-obstructive"
+label values dc_dx_gr dc_dx_gr
 
 // Calculate length of hospital stay
 gen los_hosp=hours(first_therapy_dc_home_datetime-randomisation_datetime)/24
@@ -1042,11 +1073,40 @@ replace los_o2_calc_var=first_therapy_breathed_ra_dateti if randomisation_arm==2
 replace los_o2_calc_var=first_therapy_ceased_hfnc_dateti if randomisation_arm==2 & first_therapy_ceased_hfnc_dateti>=first_therapy_breathed_ra_dateti & first_therapy_breathed_ra_dateti~=. & first_therapy_ceased_hfnc_dateti~=.
 gen los_o2=hours(los_o2_calc_var-randomisation_datetime)/24
 
-// Determine if change of therapy received in general ward
+// Determine if change of therapy received in general ward or emergency department
+// Determine if fly-by is in the free text field
 gen cot_received_any=0
-foreach v of varlist cot_received* {
-	replace cot_received_any=1 if `v'==1
+foreach i of numlist 1/12 {
+	replace cot_received_any=1 if cot_received`i'==1 & ( cot_location`i'==4 | cot_location`i'==1 )
+	replace cot_therapy_specify`i'=lower(cot_therapy_specify`i')
+	gen cot_therapy_specify_flyby`i'=1 if strpos(cot_therapy_specify`i', "fly")>0
+	replace cot_therapy_specify_flyby`i'=strpos(cot_therapy_specify`i', "blow") if cot_therapy_specify_flyby`i'==.
+	gen cot_therapy_withfly`i'=cot_therapy`i'
+	replace cot_therapy_withfly`i'=1 if cot_therapy_specify_flyby`i'==1
+	label values cot_therapy_withfly`i' cot_therapy
 }
+
+// Calculate time from randomisation to first change in therapy
+gen rand_to_cot_hours=hours(cot_datetime1-randomisation_datetime)
+
+// If started in QCH but went to MCPH, that also counts for change in therapy
+gen tf_mater=1 if esc_transfer_hosp_specify=="MCPH" | esc_transfer_hosp_specify=="Mater Children's Hopsital" | esc_transfer_hosp_specify=="Mater Children's Hospital" | esc_transfer_hosp_specify=="Mater Children's Private" | esc_transfer_hosp_specify=="Mater Children's Private Hospital" | esc_transfer_hosp_specify=="Mater Private"
+
+// Determine first change in therapy variable for secondary outcomes
+// Change in therapy if: first change, occurs in ED, SSU or general ward, OR child transferred from QCH to MCPH, and changed from SOF to NHF or changed from NHF to SOT or flyby
+gen cot_recieved_outcome=1 if cot_received1==1 & ( cot_location1==4 | cot_location1==1 | (cot_location1==3 & tf_mater==1) ) & ///
+							  ( (randomisation_arm==1 & cot_therapy1==2) | (randomisation_arm==2 & cot_therapy_withfly1==1) )
+replace cot_recieved_outcome=0 if cot_recieved_outcome==.
+
+// Determine change between comfort scores at 4 and 48 hours
+gen cs_clinician_change=cs_clinician_02_score-cs_clinician_01_score if ~missing(cs_clinician_02_score) & ~missing(cs_clinician_01_score)
+gen cs_parent_change=cs_parent_02_score-cs_parent_01_score if ~missing(cs_parent_02_score) & ~missing(cs_parent_01_score)
+
+// Determine change in heart rate for change of therapy
+gen cot_hr_change=cot_hr1-pre_rand_hr if ~missing(cot_hr1) & ~missing(pre_rand_hr)
+
+// Determine change in respiratory rate for change of therapy
+gen cot_rr_change=cot_rr1-pre_rand_rr if ~missing(cot_rr1) & ~missing(pre_rand_rr)
 
 // Determine if ICU/HDU admission occurred
 gen cot_icu=0
@@ -1062,21 +1122,24 @@ foreach v of varlist cot_location* {
 * Only include if they originated from a non-tertiary hospital
 replace cot_transfer_hosp=. if study_hospital_o~="CAB" & study_hospital_o~="IP" & study_hospital_o~="REDC" & study_hospital_o~="TPCH"
 
+// Determine the time post-oxygen therapy commencement that the VAS was administered
+gen cs_parent_time=cs_parent_02_datetime-commencement_datetime if ~missing(cs_parent_02_datetime) & ~missing(commencement_datetime)
+
 // Determine if the child received escalation of therapy
 // Defined as admission to ICU/HDU or ventilation in ICU
 gen esc_therapy=0
-replace esc_therapy=1 if cot_icu==1
+replace esc_therapy=1 if cot_icu==1 | cot_transfer_hosp==1
 replace esc_therapy=1 if icu_cpap==1 | icu_niv==1 | icu_inv==1
 
 // Create variables for sensitivity analyses
 * Analysis 1: ICU admission + 3/4 clinical criteria
-gen sens_icu=0 if crf09_cat=="TT ESC TRANSFER" | crf09_cat=="RT ESC TRANSFER" | crf09_cat=="ESC ONLY"
-egen sens_icu_count=anycount(crf9_pia_03_01 crf9_pia_03_03 crf9_pia_03_04 crf9_pia_03_05), values(1)
-replace sens_icu=1 if sens_icu_count==3 | sens_icu_count==4
+gen cot_icu_sens=1 if crf09_cat=="RT ESC TRANSFER" | crf09_cat=="ESC ONLY" | crf09_cat=="TT ESC TRANSFER"
+egen cot_icu_sens_count=anycount(crf9_pia_03_01 crf9_pia_03_03 crf9_pia_03_04 crf9_pia_03_05), values(1)
+replace cot_icu_sens=0 if cot_icu_sens_count==0 | cot_icu_sens_count==1 | cot_icu_sens_count==2
 * Analysis 2: transfer
-gen sens_transfer=0 if crf09_cat=="TT ESC TRANSFER" | crf09_cat=="RT ESC TRANSFER" | crf09_cat=="TRANSFER ONLY"
-egen sens_transfer_count=anycount(crf9_ptart_02_01 crf9_ptart_02_03 crf9_ptart_02_04 crf9_ptart_02_05), values(1)
-replace sens_transfer=1 if sens_transfer_count==3 | sens_transfer_count==4
+gen cot_transfer_sens=1 if crf09_cat=="RT ESC TRANSFER" | crf09_cat=="TRANSFER ONLY" | crf09_cat=="TT ESC TRANSFER"
+egen cot_transfer_sens_count=anycount(crf9_ptart_02_01 crf9_ptart_02_03 crf9_ptart_02_04 crf9_ptart_02_05), values(1)
+replace cot_transfer_sens=0 if cot_transfer_sens_count==0 | cot_transfer_sens_count==1 | cot_transfer_sens_count==2
 
 // Protocol deviation: change of therapy
 gen pd_cot=1 if randomisation_arm~=commencement_arm
@@ -1085,5 +1148,19 @@ replace pd_cot=3 if commencement_arm==3
 replace pd_cot=4 if commencement_arm==4
 label define pd_cot 1 "No PD" 2 "Other treatment" 3 "Neither treatment" 4 "No treatment"
 label values pd_cot pd_cot
+
+// Insert extra missing data points
+replace dem_adm_weight=11.7 if subjid=="0048-1665"
+
+// Insert missing diagnosis groups
+replace dc_dx_gr=1 if subjid=="0054-1016" | subjid=="0057-0261" | subjid=="0111-1473" | subjid=="0111-1482" | subjid=="0111-2971" | subjid=="0111-4888" | subjid=="0115-1261" | subjid=="0122-0028"
+replace dc_dx_gr=2 if subjid=="0046-0129" | subjid=="0046-0800" | subjid=="0047-0162" | subjid=="0047-0367" | subjid=="0048-1019" | subjid=="0048-1290" | subjid=="0048-1657" | subjid=="0048-1829" | subjid=="0053-0071" | subjid=="0053-0086" | subjid=="0053-0131" | subjid=="0111-0371" | subjid=="0111-4798" |subjid=="0111-5048" | subjid=="0112-1000" | subjid=="0115-1422" | subjid=="0122-0112"
+
+// Merge on intolerance data
+sort subjid
+merge 1:1 subjid using "PARIS2_Intolerance"
+gen cot_intolerance1=1 if Intolerance=="yes"
+replace cot_intolerance1=0 if Intolerance=="no"
+drop _merge
 
 save "PARIS2.dta", replace

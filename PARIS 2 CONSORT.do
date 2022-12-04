@@ -5,7 +5,9 @@
 
 /*** CONSORT Diagram ***/
 
-preserve
+// Remove deleted patients
+drop if subjstat=="deleted"
+
 // Number of patients screened for eligibility
 count if adm_datetime~=.
 
@@ -37,10 +39,10 @@ tab consent_status, m
 
 // Non-consent reasons
 // Not approached = clinical decision + missed + not available
-tab non_consent_reason if inc_cri_not_met==0 & exc_cri_met==0, m
+tab non_consent_reason, m
 
 // Eligible for consent-to-continue
-tab consent_type_eligible if inc_cri_not_met==0 & exc_cri_met==0
+tab consent_type_eligible
 
 // Number who were randomised
 tab randomisation_status, m
@@ -49,13 +51,19 @@ tab randomisation_status, m
 tab consent_status randomisation_arm, m
 
 // Withdrawal
-**************** Withdrawal and deleted patients
 tab revocation_status randomisation_arm, m
 tab data_collection_status randomisation_arm, m
 tab revocation_party, m
 tab study_withdrawal_reason, m
 
-drop if revocation_status==1
+drop if revocation_status==1 & data_collection_status==0
 
-// Crossed over to high flow
-tab cot_therapy1 randomisation_arm
+// Crossed over
+tab cot_received1 randomisation_arm if ( cot_location1==4 | cot_location1==1 | (cot_location1==3 & tf_mater==1) )
+tab cot_therapy_withfly1 randomisation_arm if cot_received1==1 & ( cot_location1==4 | cot_location1==1 | (cot_location1==3 & tf_mater==1) )
+tab cot_therapy_specify1 if cot_received1==1 & ( cot_location1==4 | cot_location1==1 | (cot_location1==3 & tf_mater==1) ) & randomisation_arm==1 // SOT
+tab cot_therapy_specify1 if cot_received1==1 & ( cot_location1==4 | cot_location1==1 | (cot_location1==3 & tf_mater==1) ) & randomisation_arm==2 // NHF
+
+// ICU
+tab cot_icu if cot_therapy1==2 & randomisation_arm==1, m
+tab cot_icu if cot_received1~=1 & randomisation_arm==2, m
